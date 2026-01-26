@@ -1,44 +1,43 @@
-import { generateTokenAndSetCookie } from "../utils/generateToken.js";
+import express from "express";
+
 import User from "../models/userModel.js";
+import generateTokenAndSetCookie from "../utils/generateToken.js";
+
 import bcrypt from "bcryptjs";
 
-export const signup = async (request, response) => {
+const router = express.Router();
+
+// function to add a new user (he didn't have an account yet)
+async function signup(request, response) {
 	try {
 		const { fullName, username, email, password } = request.body;
 
-		// regex to specify the format of the email
-		const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+		// only gmail are enabled
+		const emailRegex = "^[\\w.+\\-]+@gmail\\.com$";
+
 		if (!emailRegex.test(email)) {
-			return response.status(400).json({ error: "Invalid email format" });
+			return response.status(400).json({ message: "Invalid email format" });
 		}
 
-		const existingUser = await User.findOne({ username });
-		if (existingUser) {
-			return response.status(400).json({ error: "Username is already taken" });
+		const existingUser = await User.findOne({ "username": username });
+		if (!existingUser) {
+			return response.status(400).json({ message: "User is already taken" });
 		}
 
-		const existingEmail = await User.findOne({ email });
-		if (existingEmail) {
-			return response.status(400).json({ error: "Email is already taken" });
-		}
-
-		if (password.length < 6) {
-			return response.status(400).json({ error: "Password must be at least 6 characters long" });
-		}
-
-		// we hash the password
 		const salt = await bcrypt.genSalt(10);
-		const hashedPassword = await bcrypt.hash(password, salt);
+		const hashedPassword  = await bcrypt.hash(password, salt);
 
+		// we create the new user document in the database with the hashed password not the plain text password
 		const newUser = new User({
-			fullName,
-			username,
-			email,
-			password: hashedPassword,
+			fullName: fullName,
+			username: username,
+			email: email,
+			password: hashedPassword
 		});
 
 		if (newUser) {
 			generateTokenAndSetCookie(newUser._id, response);
+
 			await newUser.save();
 
 			response.status(201).json({
@@ -48,62 +47,16 @@ export const signup = async (request, response) => {
 				email: newUser.email,
 				followers: newUser.followers,
 				following: newUser.following,
-				profileImg: newUser.profileImg,
-				coverImg: newUser.coverImg,
+				profileImg: newUser.profileImage,
+				coverImg: newUser.coverImage,
 			});
 		} else {
-			response.status(400).json({ error: "Invalid user data" });
+			response.status(400).json({ message: "Invalid user data" });
 		}
 	} catch (error) {
-		console.log("Error in signup controller", error.message);
-		response.status(500).json({ error: "Internal Server Error" });
+		console.log(`Error in sign up ${error.message}`);
+		response.status(500).json({ message: "Internal server error" });
 	}
-};
+}
 
-export const login = async (request, response) => {
-	try {
-		const { username, password } = request.body;
-		const user = await User.findOne({ username });
-		const isPasswordCorrect = await bcrypt.compare(password, user?.password || "");
-
-		if (!user || !isPasswordCorrect) {
-			return response.status(400).json({ error: "Invalid username or password" });
-		}
-
-		generateTokenAndSetCookie(user._id, response);
-
-		response.status(200).json({
-			_id: user._id,
-			fullName: user.fullName,
-			username: user.username,
-			email: user.email,
-			followers: user.followers,
-			following: user.following,
-			profileImg: user.profileImg,
-			coverImg: user.coverImg,
-		});
-	} catch (error) {
-		console.log("Error in login controller", error.message);
-		response.status(500).json({ error: "Internal Server Error" });
-	}
-};
-
-export const logout = async (request, response) => {
-	try {
-		response.cookie("jwt", "", { maxAge: 0 });
-		response.status(200).json({ message: "Logged out successfully" });
-	} catch (error) {
-		console.log("Error in logout controller", error.message);
-		response.status(500).json({ error: "Internal Server Error" });
-	}
-};
-
-export const getMe = async (request, response) => {
-	try {
-		const user = await User.findById(request.user._id).select("-password");
-		response.status(200).json(user);
-	} catch (error) {
-		console.log("Error in getMe controller", error.message);
-		response.status(500).json({ error: "Internal Server Error" });
-	}
-};
+export default router;
