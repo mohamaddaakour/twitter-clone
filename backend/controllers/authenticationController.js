@@ -1,26 +1,21 @@
-import express from "express";
-
 import User from "../models/userModel.js";
 import generateTokenAndSetCookie from "../utils/generateToken.js";
 
 import bcrypt from "bcryptjs";
-
-const router = express.Router();
 
 // function to add a new user (he didn't have an account yet)
 async function signup(request, response) {
 	try {
 		const { fullName, username, email, password } = request.body;
 
-		// only gmail are enabled
-		const emailRegex = "^[\\w.+\\-]+@gmail\\.com$";
+		const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 		if (!emailRegex.test(email)) {
 			return response.status(400).json({ message: "Invalid email format" });
 		}
 
 		const existingUser = await User.findOne({ "username": username });
-		if (!existingUser) {
+		if (existingUser) {
 			return response.status(400).json({ message: "User is already taken" });
 		}
 
@@ -36,9 +31,11 @@ async function signup(request, response) {
 		});
 
 		if (newUser) {
-			generateTokenAndSetCookie(newUser._id, response);
-
+			// we add the user to the database
 			await newUser.save();
+
+			// genreate the token and the cookie
+			generateTokenAndSetCookie(newUser._id, response);
 
 			response.status(201).json({
 				_id: newUser._id,
@@ -59,4 +56,4 @@ async function signup(request, response) {
 	}
 }
 
-export default router;
+export { signup };
