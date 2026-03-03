@@ -1,39 +1,39 @@
-import express from "express";
-import type { Application } from "express";
-import dotenv from "dotenv";
-
+import "dotenv/config";
+import mongoose from "mongoose";
+import app from "./app.ts";
 import connectDB from "./config/db.ts";
 
-import userRoutes from "./routes/user.route.ts";
+const PORT = process.env.PORT ? Number(process.env.PORT) : 8000;
 
-dotenv.config();
+const startServer = async (): Promise<void> => {
+  try {
+    await connectDB();
 
-const app: Application = express();
+    const server = app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
 
-const PORT: number = Number(process.env.PORT) || 6000;
+    const shutdown = async (): Promise<void> => {
+      console.log("Shutting down server...");
+      await mongoose.connection.close();
+      server.close(() => {
+        console.log("Server closed");
+        process.exit(0);
+      });
+    };
 
-// middlewares
-app.use(express.json({ limit: "5mb" }));
-app.use(express.urlencoded({ extended: true }));
+    process.on("SIGINT", shutdown);
+    process.on("SIGTERM", shutdown);
 
-app.use("/users", userRoutes);
-
-// connection to the database function
-const connectionDB = async (): Promise<void> => {
-    try {
-        await connectDB();
-        console.log(`Connection successfully to the database`);
-
-        app.listen((PORT), () => {
-            console.log(`Server listening on port ${PORT}`);
-        });
-    } catch (error: unknown) {
-        if (error instanceof Error) {
-            console.log(`Error: ${error.message}`);
-        } else {
-            console.log(`Unknown error connecting to the database`);
-        } 
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      console.error("Server startup failed:", error.message);
+    } else {
+      console.error("Unknown startup error");
     }
-}
 
-connectionDB();
+    process.exit(1);
+  }
+};
+
+startServer();
